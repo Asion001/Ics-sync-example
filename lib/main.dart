@@ -151,6 +151,11 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
         fieldValue.write(line.substring(colonIndex + 1));
       }
     }
+    
+    // Process final field if exists
+    if (currentField != null && currentEvent != null) {
+      _setEventField(currentEvent, currentField, fieldValue.toString());
+    }
 
     return events;
   }
@@ -189,12 +194,15 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
       if (dateStr.length >= 15 && dateStr.contains('T')) {
         final parts = dateStr.split('T');
         final datePart = parts[0];
-        final timePart = parts[1].substring(0, 6);
+        final timePart = parts[1];
         
-        return DateTime.parse(
-          '${datePart.substring(0, 4)}-${datePart.substring(4, 6)}-${datePart.substring(6, 8)} '
-          '${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}'
-        );
+        // Ensure time part is at least 6 characters
+        if (timePart.length >= 6) {
+          return DateTime.parse(
+            '${datePart.substring(0, 4)}-${datePart.substring(4, 6)}-${datePart.substring(6, 8)} '
+            '${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}'
+          );
+        }
       }
       
       return DateTime.now();

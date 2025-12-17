@@ -50,7 +50,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            // For production, configure proper release signing in local.properties
+            // or use default unsigned configuration
         }
     }
 }
