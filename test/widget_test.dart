@@ -7,6 +7,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:add_2_calendar/add_2_calendar.dart';
 
 import 'package:ics_sync_example/main.dart';
 
@@ -105,7 +106,7 @@ END:VCALENDAR''';
 
 // Extension to make the private method accessible for testing
 extension _IcsCalendarPageStateTestExtension on _IcsCalendarPageState {
-  List<dynamic> parseIcsContentForTest(String icsContent) {
+  List<Event> parseIcsContentForTest(String icsContent) {
     return _parseIcsContent(icsContent);
   }
 }
