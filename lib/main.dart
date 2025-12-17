@@ -112,9 +112,18 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
 
   List<Event> _parseIcsContent(String icsContent) {
     final events = <Event>[];
-    final lines = icsContent.split('\n');
+    // Split on both \n and \r\n to handle different line endings
+    final lines = icsContent.split(RegExp(r'\r?\n'));
     
-    Event? currentEvent;
+    // Temporary storage for event fields
+    String? eventTitle;
+    String? eventDescription;
+    String? eventLocation;
+    DateTime? eventStartDate;
+    DateTime? eventEndDate;
+    bool isAllDayEvent = false;
+    bool inEvent = false;
+    
     String? currentField;
     StringBuffer fieldValue = StringBuffer();
 
@@ -128,50 +137,92 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
       }
       
       // Process previous field if exists
-      if (currentField != null && currentEvent != null) {
-        _setEventField(currentEvent, currentField, fieldValue.toString());
+      if (currentField != null && inEvent) {
+        _setEventField(
+          currentField,
+          fieldValue.toString(),
+          (title) => eventTitle = title,
+          (desc) => eventDescription = desc,
+          (loc) => eventLocation = loc,
+          (start) => eventStartDate = start,
+          (end) => eventEndDate = end,
+        );
         currentField = null;
         fieldValue.clear();
       }
 
       if (line.startsWith('BEGIN:VEVENT')) {
-        currentEvent = Event(
-          title: '',
-          startDate: DateTime.now(),
-          endDate: DateTime.now(),
-        );
+        // Reset event data
+        eventTitle = null;
+        eventDescription = null;
+        eventLocation = null;
+        eventStartDate = null;
+        eventEndDate = null;
+        isAllDayEvent = false;
+        inEvent = true;
       } else if (line.startsWith('END:VEVENT')) {
-        if (currentEvent != null && currentEvent.title.isNotEmpty) {
-          events.add(currentEvent);
+        if (inEvent && eventTitle != null && eventTitle!.isNotEmpty) {
+          // Create event with all collected data
+          final event = Event(
+            title: eventTitle!,
+            description: eventDescription,
+            location: eventLocation,
+            startDate: eventStartDate ?? DateTime.now(),
+            endDate: eventEndDate ?? DateTime.now(),
+            allDay: isAllDayEvent,
+          );
+          events.add(event);
         }
-        currentEvent = null;
-      } else if (currentEvent != null && line.contains(':')) {
+        inEvent = false;
+      } else if (inEvent && line.contains(':')) {
         final colonIndex = line.indexOf(':');
         currentField = line.substring(0, colonIndex);
         fieldValue.write(line.substring(colonIndex + 1));
+        
+        // Check if this is an all-day event (VALUE=DATE parameter)
+        if ((currentField.startsWith('DTSTART') || currentField.startsWith('DTEND')) && 
+            currentField.contains('VALUE=DATE')) {
+          isAllDayEvent = true;
+        }
       }
     }
     
     // Process final field if exists
-    if (currentField != null && currentEvent != null) {
-      _setEventField(currentEvent, currentField, fieldValue.toString());
+    if (currentField != null && inEvent) {
+      _setEventField(
+        currentField,
+        fieldValue.toString(),
+        (title) => eventTitle = title,
+        (desc) => eventDescription = desc,
+        (loc) => eventLocation = loc,
+        (start) => eventStartDate = start,
+        (end) => eventEndDate = end,
+      );
     }
 
     return events;
   }
 
-  void _setEventField(Event event, String field, String value) {
+  void _setEventField(
+    String field,
+    String value,
+    Function(String) setTitle,
+    Function(String) setDescription,
+    Function(String) setLocation,
+    Function(DateTime) setStartDate,
+    Function(DateTime) setEndDate,
+  ) {
     try {
       if (field.startsWith('SUMMARY')) {
-        event.title = value;
+        setTitle(value);
       } else if (field.startsWith('DESCRIPTION')) {
-        event.description = value.replaceAll('\\n', '\n').replaceAll('\\,', ',');
+        setDescription(value.replaceAll('\\n', '\n').replaceAll('\\,', ','));
       } else if (field.startsWith('LOCATION')) {
-        event.location = value;
+        setLocation(value);
       } else if (field.startsWith('DTSTART')) {
-        event.startDate = _parseIcsDate(value);
+        setStartDate(_parseIcsDate(value));
       } else if (field.startsWith('DTEND')) {
-        event.endDate = _parseIcsDate(value);
+        setEndDate(_parseIcsDate(value));
       }
     } catch (e) {
       debugPrint('Error parsing field $field: $e');
@@ -181,27 +232,29 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
   DateTime _parseIcsDate(String dateStr) {
     try {
       // Remove any timezone info for simplicity
-      dateStr = dateStr.split(';').last.split(':').last;
+      dateStr = dateStr.split(';').last.split(':').last.trim();
       
-      // Handle YYYYMMDD format
-      if (dateStr.length == 8) {
-        return DateTime.parse(
+      // Handle YYYYMMDD format (date only)
+      if (dateStr.length == 8 && !dateStr.contains('T')) {
+        final parsedDate = DateTime.parse(
           '${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}'
         );
+        // For all-day events, return the date at midnight
+        return parsedDate;
       }
       
-      // Handle YYYYMMDDTHHMMSS format
+      // Handle YYYYMMDDTHHMMSS format (with time)
       if (dateStr.length >= 15 && dateStr.contains('T')) {
         final parts = dateStr.split('T');
         final datePart = parts[0];
-        final timePart = parts[1];
+        final timePart = parts[1].replaceAll('Z', ''); // Remove Z timezone indicator
         
         // Ensure time part is at least 6 characters
         if (timePart.length >= 6) {
           return DateTime.parse(
             '${datePart.substring(0, 4)}-${datePart.substring(4, 6)}-${datePart.substring(6, 8)} '
             '${timePart.substring(0, 2)}:${timePart.substring(2, 4)}:${timePart.substring(4, 6)}'
-          );
+          ).toUtc();
         }
       }
       
