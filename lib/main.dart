@@ -220,16 +220,16 @@ class _IcsCalendarPageState extends State<IcsCalendarPage> {
       } else if (field.startsWith('LOCATION')) {
         setLocation(value);
       } else if (field.startsWith('DTSTART')) {
-        setStartDate(_parseIcsDate(value, field.contains('VALUE=DATE')));
+        setStartDate(_parseIcsDate(value));
       } else if (field.startsWith('DTEND')) {
-        setEndDate(_parseIcsDate(value, field.contains('VALUE=DATE')));
+        setEndDate(_parseIcsDate(value));
       }
     } catch (e) {
       debugPrint('Error parsing field $field: $e');
     }
   }
 
-  DateTime _parseIcsDate(String dateStr, bool isDateOnly) {
+  DateTime _parseIcsDate(String dateStr) {
     try {
       // Remove any timezone info for simplicity
       dateStr = dateStr.split(';').last.split(':').last.trim();
